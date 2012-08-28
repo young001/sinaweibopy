@@ -13,6 +13,7 @@ try:
 except ImportError:
     import simplejson as json
 import time
+import sys
 import urllib
 import urllib2
 import logging
@@ -123,7 +124,11 @@ def _http_call(url, method, authorization, **kw):
         req.add_header('Authorization', 'OAuth2 %s' % authorization)
     if boundary:
         req.add_header('Content-Type', 'multipart/form-data; boundary=%s' % boundary)
-    resp = urllib2.urlopen(req)
+    try:
+        resp = urllib2.urlopen(req)
+    except urllib2.HTTPError as error:
+        print error.read()
+        sys.exit()
     body = resp.read()
     r = json.loads(body, object_hook=_obj_hook)
     if hasattr(r, 'error_code'):
@@ -140,7 +145,10 @@ class HttpObject(object):
         def wrap(**kw):
             if self.client.is_expires():
                 raise APIError('21327', 'expired_token', attr)
-            return _http_call('%s%s.json' % (self.client.api_url, attr.replace('__', '/')), self.method, self.client.access_token, **kw)
+            if 'remind' in attr:
+                return _http_call('%s%s.json' % (self.client.remind_url, attr.replace('__', '/')), self.method, self.client.access_token, **kw)
+            else:
+                return _http_call('%s%s.json' % (self.client.api_url, attr.replace('__', '/')), self.method, self.client.access_token, **kw)
         return wrap
 
 class APIClient(object):
@@ -154,6 +162,7 @@ class APIClient(object):
         self.response_type = response_type
         self.auth_url = 'https://%s/oauth2/' % domain
         self.api_url = 'https://%s/%s/' % (domain, version)
+        self.remind_url = 'https://rm.%s/%s/' % (domain, version)
         self.access_token = None
         self.expires = 0.0
         self.get = HttpObject(self, _HTTP_GET)
