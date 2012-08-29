@@ -40,6 +40,19 @@ class APIError(StandardError):
     def __str__(self):
         return 'APIError: %s: %s, request: %s' % (self.error_code, self.error, self.request)
 
+class _HTTPError(StandardError):
+    '''
+    raise HTTPError if got url error.
+    '''
+    def __init__(self, error_code, error, request):
+        self.error_code = error_code
+        self.error = error
+        self.request = request
+        StandardError.__init__(self, error)
+
+    def __str__(self):
+        return 'HTTPError: %s: %s, request: %s' % (self.error_code, self.error, self.request)
+
 class JsonObject(dict):
     '''
     general json object that can bind any fields but also act as a dict.
@@ -127,8 +140,9 @@ def _http_call(url, method, authorization, **kw):
     try:
         resp = urllib2.urlopen(req)
     except urllib2.HTTPError as error:
-        print error.read()
-        sys.exit()
+        error_data = error.read()
+        error_r = json.loads(error_data,object_hook=_obj_hook)
+        raise _HTTPError(error_r.error_code,getattr(error_r, 'error', ''), getattr(error_r, 'request', ''))
     body = resp.read()
     r = json.loads(body, object_hook=_obj_hook)
     if hasattr(r, 'error_code'):
